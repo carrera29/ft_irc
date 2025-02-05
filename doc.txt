@@ -1,0 +1,301 @@
+1. Que son sockets y para que se utilizan
+
+    Los sockets son una forma de comunicarse con otros programas utilizando descriptores de archivos (fd) estándar de Unix.
+    Como "file descriptor" utiliza una variable de tipo entero (int).
+
+    Para programar una comunicación IRC utilizaremos "Stream Sockets" -> SOCK_STREAM
+    Por qué: los Stream Sockets son flujos de comunicación bidireccionales conectados y fiables.
+    Utilizan un protocolo llamado “Transmission Control Protocol” (TCP) que asegura de que los datos llegan de manera secuencial y sin errores.
+    Si envías dos elementos en el orden “1, 2” -> llegarán en el orden “1, 2” al extremo opuesto.
+
+
+2. struct addrinfo
+
+    Esta estructura se utiliza para preparar las estructuras de direcciones de socket para su uso posterior. 
+    También se utiliza en búsquedas de nombres de host y de nombres de servicios.
+
+        struct addrinfo {
+            int              ai_flags;     // AI_PASSIVE, AI_CANONNAME, etc.
+            int              ai_family;    // AF_INET (IPv4), AF_INET6 (IPv6), AF_UNSPEC (whatever)
+            int              ai_socktype;  // SOCK_STREAM, SOCK_DGRAM
+            int              ai_protocol;  // use 0 for "any"
+            size_t           ai_addrlen;   // size of ai_addr in bytes
+            struct sockaddr *ai_addr;      // struct sockaddr_in or _in6
+            char            *ai_canonname; // full canonical hostname
+
+            struct addrinfo *ai_next;      // linked list, next node
+        };
+
+    La esturctura "sockaddr" que se encuentra en addrinfo :
+
+        struct sockaddr {
+            unsigned short    sa_family;    // address family, AF_xxx
+            char              sa_data[14];  // 14 bytes of protocol address (dirección de destino y un número de puerto para el socket)
+        }; 
+
+    getaddrinfo() -> devolverá un puntero a una nueva lista enlazada de estas estructura.
+
+    ¿Se debe usar IPv4 o IPv6? las estructuras y funciones variarán según cual se use
+
+
+3. getaddrinfo()
+
+    Le proporciona a esta función tres parámetros de entrada y devuelve un puntero a una lista enlazada, en este caso "res", de resultados.
+    
+        #include <sys/types.h>
+        #include <sys/socket.h>
+        #include <netdb.h>
+
+        int getaddrinfo(const char *node,     // e.g. "www.example.com" or IP
+                        const char *service,  // e.g. "http" or PORT number
+                        const struct addrinfo *hints,
+                        struct addrinfo **res);
+
+    Ejemplo de uso de struct addrinfo y getaddrinfo:
+
+        int status;
+        struct addrinfo hints;
+        struct addrinfo *servinfo;  // will point to the results
+
+        memset(&hints, 0, sizeof hints); // make sure the struct is empty
+        hints.ai_family = AF_UNSPEC;     // don't care IPv4 or IPv6
+        hints.ai_socktype = SOCK_STREAM; // TCP stream sockets
+        hints.ai_flags = AI_PASSIVE;     // fill in my IP for me
+
+        if ((status = getaddrinfo(NULL, "3490", &hints, &servinfo)) != 0) {
+            fprintf(stderr, "getaddrinfo error: %s\n", gai_strerror(status));
+            exit(1);
+        }
+
+        // servinfo now points to a linked list of 1 or more struct addrinfos
+
+        // ... do everything until you don't need servinfo anymore ....
+
+        freeaddrinfo(servinfo); // free the linked-list
+
+
+4. Socket()
+
+    #include <sys/types.h>
+    #include <sys/socket.h>
+
+    int socket(int domain, int type, int protocol); 
+
+
+5. bind()
+
+    #include <sys/types.h>
+    #include <sys/socket.h>
+
+    int bind(int sockfd, // fd que retorna socket()
+            struct sockaddr *my_addr, // 
+            int addrlen);
+
+
+6. setsockopt()
+
+    Se usa para mejorar el control sobre los sockets y optimizar su comportamiento. 
+
+    Opción	Descripción
+    SO_REUSEADDR	Permite reutilizar direcciones y puertos.
+    SO_KEEPALIVE	Detecta si la conexión sigue activa.
+    SO_LINGER	Controla el cierre del socket.
+    SO_RCVBUF	Tamaño del buffer de recepción.
+    SO_SNDBUF	Tamaño del buffer de envío.
+
+
+    Verificar si el cliente sigue conectado:
+
+        int keepalive = 1;
+        
+        setsockopt(clientSocket, SOL_SOCKET, SO_KEEPALIVE, &keepalive, sizeof(keepalive));
+
+
+    Reutilizar la misma dirección y puerto inmediatamente:
+
+        int yes=1;
+        
+        if (setsockopt(listener,SOL_SOCKET,SO_REUSEADDR,&yes,sizeof yes) == -1) {
+            perror("setsockopt");
+            exit(1);
+        } 
+
+
+7. Connect()
+
+    A diferencia de bind(), si no nos importa nuestro número de puerto local; solo importa a dónde vamos (el puerto remoto). 
+    connect() elegirá un puerto local para nosotros y el sitio al que nos conectamos obtendrá automáticamente esta información.
+
+        #include <sys/types.h>
+        #include <sys/socket.h>
+
+        int connect(int sockfd, struct sockaddr *serv_addr, int addrlen);
+
+    ejemplo:
+
+        struct addrinfo hints, *res;
+        int sockfd;
+
+        memset(&hints, 0, sizeof hints);
+        hints.ai_family = AF_UNSPEC;
+        hints.ai_socktype = SOCK_STREAM;
+
+        getaddrinfo("www.example.com", "3490", &hints, &res);
+
+        sockfd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+
+        connect(sockfd, res->ai_addr, res->ai_addrlen);
+
+8. listen()
+
+    Le dice al sistema operativo: "Estoy listo para aceptar conexiones en este socket."
+    Sin listen(), el socket sigue existiendo, pero no puede recibir clientes.
+
+    int listen(int sockfd, int backlog);
+
+    *backlog es el max. de conexiones permitidas en cola a la espera de ser aceptadas (20).
+
+
+9. accept()
+
+    ¿Se ejecuta una o varias veces?
+        Si el servidor solo espera un cliente, entonces accept() se ejecuta una vez.
+        Si el servidor debe aceptar varios clientes, entonces accept() debe ejecutarse en un bucle.
+
+    #include <sys/types.h>
+    #include <sys/socket.h>
+
+    int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen);
+
+
+11. send() and recv()
+
+    int send(int sockfd, const void *msg, int len, int flags);
+
+
+    char *msg = "Hello world!";
+    int len, bytes_sent;
+
+    len = strlen(msg);
+    bytes_sent = send(sockfd, msg, len, 0);
+
+    int recv(int sockfd, void *buf, int len, int flags);
+    Puede devolver 0. Esto significa que el lado remoto ha cerrado la conexión.
+
+
+12. close()
+
+    close(sockfd); 
+
+
+13. Poll()
+
+    Un servidor real, para manejar la simultaneidad de recepción y envío de mensajes, utiliza un mecanismo de multiplexación de entrada/salida.
+    Esto se logra con funciones como poll() o select():
+        Permiten al servidor esperar hasta que uno o más de sus sockets estén listos para alguna operación (lectura, escritura, etc).
+        Monoritea una matriz de estructuras pollfds con información sobre los descriptores de socket a monitorear.
+
+
+    #include <poll.h>
+
+    int poll(struct pollfd fds[], nfds_t nfds, int timeout);
+
+    struct pollfd {
+        int fd;         // the socket descriptor
+        short events;   // bitmap of events we're interested in
+        short revents;  // when poll() returns, bitmap of events that occurred
+    };
+
+    Los eventos que son susceptibles de ser moniroreados:
+
+        Macro	Description
+        POLLIN	Alert me when data is ready to recv() on this socket.
+        POLLOUT	Alert me when I can send() data to this socket without blocking.
+        POLLHUP	Alert me when the remote closed the connection.
+    
+    Ejemplo de aplicación:
+    
+        #include <stdio.h>
+        #include <poll.h>
+
+        int main(void)
+        {
+            struct pollfd pfds[1];
+
+            pfds[0].fd = 0;          // Standard input
+            pfds[0].events = POLLIN | POLLOUT | POLLERR | POLLHUP;
+
+            int num_events = poll(pfds, 1, 2500); // 2.5 second timeout
+
+            if (num_events == 0) {
+                printf("Poll timed out!\n");
+            } else {
+                if (pfds[0].revents & POLLIN) {
+                    printf("File descriptor %d está listo para leer.\n", pfds[0].fd);
+                } 
+                if (pfds[0].revents & POLLOUT) {
+                    printf("File descriptor %d está listo para escribir.\n", pfds[0].fd);
+                }
+                if (pfds[0].revents & POLLERR) {
+                    printf("Error en el file descriptor %d.\n", pfds[0].fd);
+                }
+                if (pfds[0].revents & POLLHUP) {
+                    printf("File descriptor %d se ha desconectado.\n", pfds[0].fd);
+                }
+            }
+            return 0;
+        }
+
+
+10. Secuencia de ejecuciones
+
+    1. getaddrinfo();
+    2. socket();
+    3. bind();
+    4. listen();
+    5. accept();
+
+    #include <string.h>
+    #include <sys/types.h>
+    #include <sys/socket.h>
+    #include <netdb.h>
+
+    #define MYPORT "3490"  // the port users will be connecting to
+    #define BACKLOG 10     // how many pending connections queue will hold
+
+    int main(void)
+    {
+        struct sockaddr_storage their_addr;
+        socklen_t addr_size;
+
+        struct addrinfo hints, *res;
+        int sockfd, new_fd;
+
+        // first, load up address structs with getaddrinfo():
+
+        memset(&hints, 0, sizeof hints);
+        hints.ai_family = AF_UNSPEC;  // use IPv4 or IPv6, whichever
+        hints.ai_socktype = SOCK_STREAM;
+        hints.ai_flags = AI_PASSIVE;     // fill in my IP for me
+
+        getaddrinfo(NULL, MYPORT, &hints, &res);
+
+        // make a socket, bind it, and listen on it:
+
+        sockfd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+        bind(sockfd, res->ai_addr, res->ai_addrlen);
+        listen(sockfd, BACKLOG);
+
+        // now accept an incoming connection:
+
+        addr_size = sizeof their_addr;
+        new_fd = accept(sockfd, (struct sockaddr *)&their_addr, &addr_size);
+
+        // ready to communicate on socket descriptor new_fd!
+    
+    } 
+
+    Usaremos el descriptor de socket new_fd para las funciones de send() y recv(). 
+    Si solo recibimos una única conexión, se puede cerrar() el sockfd para evitar más conexiones entrantes.
+
+
