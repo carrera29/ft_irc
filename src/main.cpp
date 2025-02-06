@@ -1,15 +1,3 @@
-/* ************************************************************************** */
-/*                                                                            */
-/*                                                        :::      ::::::::   */
-/*   main.cpp                                           :+:      :+:    :+:   */
-/*                                                    +:+ +:+         +:+     */
-/*   By: pollo <pollo@student.42.fr>                +#+  +:+       +#+        */
-/*                                                +#+#+#+#+#+   +#+           */
-/*   Created: 2025/02/02 22:04:03 by pollo             #+#    #+#             */
-/*   Updated: 2025/02/03 21:55:53 by pollo            ###   ########.fr       */
-/*                                                                            */
-/* ************************************************************************** */
-
 #include <iostream>
 #include <sys/socket.h>
 #include <netdb.h>
@@ -17,37 +5,56 @@
 #include <unistd.h>
 #include <cstring>
 #include <poll.h>
+#include <vector>
+#include "../include/client.hpp"
 
+int main() {
 
-int main()
-{
-    int				serverSocket;
-    struct addrinfo	hints;
-    struct addrinfo	*all, *i;
-    
-	// Establecemos los criterios de búsqueda de direcciones de red
+    int             port = 8080; // puede ser entre 0 y 65535, menos los puertos reservados por el sistema operativo (0-1023)
+    struct addrinfo hints;
+    struct addrinfo *all, *i;
+
+    /*
+        struct addrinfo {
+            int              ai_flags;     // AI_PASSIVE, AI_CANONNAME, etc.
+            int              ai_family;    // AF_INET (IPv4), AF_INET6 (IPv6), AF_UNSPEC (whatever)
+            int              ai_socktype;  // SOCK_STREAM, SOCK_DGRAM
+            int              ai_protocol;  // use 0 for "any"
+            size_t           ai_addrlen;   // size of ai_addr in bytes
+            struct sockaddr *ai_addr;      // struct sockaddr_in or _in6
+            char            *ai_canonname; // full canonical hostname
+
+            struct addrinfo *ai_next;      // linked list, next node
+        }; 
+    */
+
     memset(&hints, 0, sizeof(hints));
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_flags = AI_PASSIVE;
 
-	// Buscamos las direcciones de red que cumplan con los criterios establecidos en hints
     getaddrinfo(NULL, "8080", &hints, &all);
 
-	// Iteramos sobre las direcciones de red encontradas que cumplan con los criterios
-	// usamos bind() para asociar una dirección de red a un socket y un puerto
-    for (i = all; i != NULL; i = i->ai_next)
-    {
+    int serverSocket;
+    for (i = all; i != NULL; i = i->ai_next) {
         serverSocket = socket(i->ai_family, i->ai_socktype, i->ai_protocol);
         if (serverSocket == -1)
             continue;
+
+        // reutilizar el puerto si está ocupado por otro proceso que no ha cerrado el socket
+        // SOL_SOCKET es el nivel de socket, SO_REUSEADDR es la opción que permite reutilizar el puerto
+        int yes = 1;   // un puntero a int con valor 1 para activar la opción
+        if (setsockopt(serverSocket, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int)) == -1) { 
+            std::cerr << "Failed to setsockopt" << std::endl;
+            return 1;
+        }
+        // enlazar el socket a la dirección y puerto
         if (bind(serverSocket, i->ai_addr, i->ai_addrlen) == -1) {
             close(serverSocket);
             continue;
         }
         break;
-    } 
-
+    }
     freeaddrinfo(all);
 
     if (i == NULL) {
@@ -55,91 +62,91 @@ int main()
         return 1;
     }
 
-	// Ponemos el socket en modo de escucha
-    if (listen(serverSocket, 10) == -1) {
+    int maxQueue = 10;
+    if (listen(serverSocket, maxQueue) == -1) { // maxQueue es el número máximo de conexiones pendientes
         std::cerr << "Failed to listen" << std::endl;
         return 1;
     }
+    std::cout << "Server listening on port 8080..." << std::endl;
 
-    std::cout << "Server listening on port 8080... Press 'q' to stop." << std::endl;
-
-	// Aceptamos la conexión de un cliente
-	sockaddr_storage clientAddr;
-	socklen_t clientAddrSize = sizeof(clientAddr);
-	int clientfd = accept(serverSocket, (sockaddr*)&clientAddr, &clientAddrSize);
-	if (clientfd == -1) {
-		std::cerr << "Failed to accept" << std::endl;
-		return 1;
-	}
-
-	// Enviamos un mensaje al cliente
-	const char* msg = "Hello, client!\n";
-    int len = strlen(msg);
-	
-    int bytes_sent = send(clientfd, msg, len, 0);
-	if (bytes_sent == -1) {
-		std::cerr << "Failed to send" << std::endl;
-		return 1;
-	}
-
-	// Configuramos pollfd para el cliente y la entrada estándar
-	struct pollfd fds[2];
-	fds[0].fd = clientfd; // Socket del cliente
-	fds[0].events = POLLIN; // Espera a que haya datos para leer
-	fds[1].fd = STDIN_FILENO; // Entrada estándar por teclado
-	fds[1].events = POLLIN; // Espera a que haya datos para leer
-
-
-
-	while (true) {
-
-		int ret = poll(fds, 2, -1); // fds, nfds, timeout (-1 para esperar indefinidamente)
-		if (ret == -1) {
-			std::cerr << "Failed to poll" << std::endl;
-			return 1;
-		}
-
-		// Si fd de cliente tiene datos para leer (POLLIN)
-		if (fds[0].revents & POLLIN) {
-
-			char buffer[1024];
-			int bytes_received = recv(clientfd, buffer, 1024, 0);
-		
-			if (bytes_received > 0) {
-				buffer[bytes_received] = '\0';
-				std::cout << "Client says: " << buffer << std::endl;
-				if (buffer[0] == 'q') {
-					std::cout << "Stopping server..." << std::endl;
-					break;
-				}
-			} 
-			else if (bytes_received == 0) {
-				std::cout << "Client disconnected" << std::endl;
-				break;
-			} 
-			else if (bytes_received == -1) {
-				std::cerr << "Failed to receive" << std::endl;
-				return 1;
-			}
-		}
-
-		// Si el fd de entrada estándar tiene datos para leer (POLLIN)
-		else if (fds[1].revents & POLLIN) {
-			
-			char buffer[1024];
-			std::cin.getline(buffer, sizeof(buffer));
-			strcat(buffer, "\n");
-			int bytes_sent = send(clientfd, buffer, strlen(buffer), 0);
-			if (bytes_sent == -1) {
-				std::cerr << "Failed to send" << std::endl;
-				return 1;
-			}
-		}
-	}
-	
-
-    std::cout << "Shutting down server..." << std::endl;
-    close(serverSocket);
     
+    // creamos un vector de pollfd para almacenar los descriptores de los sockets
+    // e inicializamos el vector con el descriptor del socket del servidor
+
+	/*
+        struct pollfd {
+            int fd;         // el fd del socket
+            short events;   // bitmap son los eventos que queremos monitorizar
+            short revents;  // son los eventos que han ocurrido
+        };
+    */
+
+    std::vector<struct pollfd> fds; // vector de pollfd para almacenar los descriptores de los sockets
+	std::vector<class client> clients; // vector de clientes conectados al servidor
+
+	struct pollfd server;
+
+	memset(&server, 0, sizeof(server));
+	server.fd = serverSocket;
+	server.events = POLLIN;
+	server.revents = 0;
+	
+    fds.push_back(server);
+
+    while (true) {
+        int events = poll(fds.data(), fds.size(), -1);
+        if (events == -1) {
+            std::cerr << "Failed to poll" << std::endl;
+            return 1;
+        }
+        for (int i = 0; i < fds.size(); ++i) {
+            if (fds[i].revents & POLLIN) { // si hay datos para leer
+
+				if (fds[i].fd == serverSocket) { // nueva conexión
+					int clientSocket = accept(serverSocket, NULL, NULL); //accept(serverSocket, &clientAddr, &clientAddrLen);
+					if (clientSocket == -1) {
+						std::cerr << "Failed to accept" << std::endl;
+						return 1;
+					}
+					
+                    // client newClient(clientSocket, i);
+                    // clients.push_back(newClient);
+
+					struct pollfd clientFd;
+					clientFd.fd = clientSocket;
+					clientFd.events = POLLIN;
+					clientFd.revents = 0;
+                    fds.push_back(clientFd);
+
+					int bytes_sent = send(clientSocket, "Welcome to the server\n", strlen("Welcome to the server\n"), 0);
+					if (bytes_sent == -1) {
+						std::cerr << "Failed to send" << std::endl;
+						return 1;
+					}
+				}
+				else {
+					char buffer [1024] = {0};
+                    memset(buffer, 0, sizeof(buffer));
+					int bytesRead = recv(fds[i].fd, buffer, sizeof(buffer) - 1, 0);
+
+					if (bytesRead <= 0) {
+						std::cout << "Client disconnected" << std::endl;
+						close(fds[i].fd);
+						fds.erase(fds.begin() + i);
+                        // clients.erase(clients.begin() + i);
+						--i;
+					}
+					else {
+						buffer[bytesRead] = '\0';
+						std::cout << "Cliente nº " << i << ": " <<buffer << std::endl;
+						memset(buffer, 0, sizeof(buffer));
+					}
+        		}	
+    		}
+		}
+	}
+
+	close(serverSocket);
+
     return 0;
 }

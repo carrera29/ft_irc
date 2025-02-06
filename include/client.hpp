@@ -5,33 +5,30 @@
 #include <netdb.h>
 #include <string.h>
 #include <unistd.h>
+#include <cstring>
 
 class client {
 
     private:
         
-        char            _login[256];
+        char            _nickname[256];
         char            _username[256];
+		bool			_operator;
         int             _id;
         int             _clientSocket;
 		struct pollfd	_fd;
 
     public:
 
-        client(int clientSocket, int id) : _clientSocket(clientSocket), _id(id) {
-			createPollFd();
+        client(int clientSocket, int id) : _clientSocket(clientSocket), _id(id), _operator(false) {
             std::cout << "Client id " << id << " connected" << std::endl;
         }
 
         ~client() {
             close(_clientSocket);
+			std::cout << "Client id " << _id << " disconnected" << std::endl;
         }
 
-		void	createPollFd() {
-			_fd.fd = _clientSocket;
-			_fd.events = POLLIN;
-			_fd.revents = 0;
-		}
 
         int	getClientSocket() {
             return _clientSocket;
@@ -45,11 +42,11 @@ class client {
 			return _id;
 		}
 
-		char*	getLogin() {
-			return _login;
+		std::string	getNickname() {
+			return _nickname;
 		}
 
-		char*	getUsername() {
+		std::string	getUsername() {
 			return _username;
 		}
 
