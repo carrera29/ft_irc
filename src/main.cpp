@@ -6,13 +6,34 @@
 #include <cstring>
 #include <poll.h>
 #include <vector>
+#include <sstream>
 #include "../include/client.hpp"
+#include "../include/server.hpp"
 
-int main() {
+int   Server::acceptConection(std::string command) {
+    std::cout << "Command: " << command << std::endl;
 
-    int             port = 8080; // puede ser entre 0 y 65535, menos los puertos reservados por el sistema operativo (0-1023)
-    struct addrinfo hints;
-    struct addrinfo *all, *i;
+    std::istringstream ss(command);
+    std::string word;
+    
+    while (ss) {
+        ss >> word;
+        if (word == "PASS") {
+            ss >> word;
+            if (word == _password)
+                std::cout << "Password correct" << std::endl;
+            else {
+                std::cout << "Password incorrect" << std::endl;
+                return -1;
+            }
+        }
+    }
+    return 0;
+}
+
+int main(void) {
+
+    Server IRCServer("password", 8080);
 
     /*
         struct addrinfo {
@@ -28,12 +49,10 @@ int main() {
         }; 
     */
 
-    memset(&hints, 0, sizeof(hints));
-    hints.ai_family = AF_UNSPEC;
-    hints.ai_socktype = SOCK_STREAM;
-    hints.ai_flags = AI_PASSIVE;
+    IRCServer.setAddressInfo();
 
-    getaddrinfo(NULL, "8080", &hints, &all);
+    struct addrinfo *all, *i;
+    getaddrinfo(NULL, "8080", IRCServer.getHints(), &all);
 
     int serverSocket;
     for (i = all; i != NULL; i = i->ai_next) {
@@ -53,6 +72,7 @@ int main() {
             close(serverSocket);
             continue;
         }
+        IRCServer.setSocket(serverSocket);
         break;
     }
     freeaddrinfo(all);
@@ -63,15 +83,11 @@ int main() {
     }
 
     int maxQueue = 10;
-    if (listen(serverSocket, maxQueue) == -1) { // maxQueue es el número máximo de conexiones pendientes
+    if (listen(IRCServer.getSocket(), maxQueue) == -1) { // maxQueue es el número máximo de conexiones pendientes
         std::cerr << "Failed to listen" << std::endl;
         return 1;
     }
     std::cout << "Server listening on port 8080..." << std::endl;
-
-    
-    // creamos un vector de pollfd para almacenar los descriptores de los sockets
-    // e inicializamos el vector con el descriptor del socket del servidor
 
 	/*
         struct pollfd {
@@ -81,59 +97,67 @@ int main() {
         };
     */
 
-    std::vector<struct pollfd> fds; // vector de pollfd para almacenar los descriptores de los sockets
-	std::vector<class client> clients; // vector de clientes conectados al servidor
-
 	struct pollfd server;
-
 	memset(&server, 0, sizeof(server));
 	server.fd = serverSocket;
 	server.events = POLLIN;
 	server.revents = 0;
 	
-    fds.push_back(server);
+    IRCServer.fds.push_back(server);
 
     while (true) {
-        int events = poll(fds.data(), fds.size(), -1);
+        int events = poll(IRCServer.fds.data(), IRCServer.sizeoffds(), -1);
         if (events == -1) {
             std::cerr << "Failed to poll" << std::endl;
             return 1;
         }
-        for (int i = 0; i < fds.size(); ++i) {
-            if (fds[i].revents & POLLIN) { // si hay datos para leer
+        for (int i = 0; i < IRCServer.sizeoffds(); ++i) {
+            if (IRCServer.fds[i].revents & POLLIN) { // si hay datos para leer
 
-				if (fds[i].fd == serverSocket) { // nueva conexión
+				if (IRCServer.fds[i].fd == serverSocket) { // nueva conexión
+                   
+                    // sockaddr_in clientAddr = {}; // almacena información del cliente (IP y puerto) 
+                    // socklen_t   size = sizeof(clientAddr); // accept() la actualiza con el tamaño real de la dirección
 					int clientSocket = accept(serverSocket, NULL, NULL); //accept(serverSocket, &clientAddr, &clientAddrLen);
 					if (clientSocket == -1) {
 						std::cerr << "Failed to accept" << std::endl;
 						return 1;
 					}
-					
-                    // client newClient(clientSocket, i);
-                    // clients.push_back(newClient);
 
-					struct pollfd clientFd;
-					clientFd.fd = clientSocket;
-					clientFd.events = POLLIN;
-					clientFd.revents = 0;
-                    fds.push_back(clientFd);
+                    struct pollfd newfd;
+                    memset(&newfd, 0, sizeof(newfd));
+                    newfd.fd = clientSocket;
+                    newfd.events = POLLIN;
+                    newfd.revents = 0;
+                    IRCServer.fds.push_back(newfd);
+                
+                    client* newClient = new client(clientSocket);
+                    IRCServer.clients[clientSocket] = newClient;
+                    std::cout << "Client number " << i << " connected" << std::endl;
 
 					int bytes_sent = send(clientSocket, "Welcome to the server\n", strlen("Welcome to the server\n"), 0);
 					if (bytes_sent == -1) {
 						std::cerr << "Failed to send" << std::endl;
 						return 1;
 					}
+                    
 				}
 				else {
 					char buffer [1024] = {0};
                     memset(buffer, 0, sizeof(buffer));
-					int bytesRead = recv(fds[i].fd, buffer, sizeof(buffer) - 1, 0);
+					int bytesRead = recv(IRCServer.fds[i].fd, buffer, sizeof(buffer) - 1, 0);
 
 					if (bytesRead <= 0) {
-						std::cout << "Client disconnected" << std::endl;
-						close(fds[i].fd);
-						fds.erase(fds.begin() + i);
-                        // clients.erase(clients.begin() + i);
+						std::cout << "Client number " << i << " disconnected" << std::endl;
+						
+                        for (IRCServer.it = IRCServer.clients.begin(); IRCServer.it != IRCServer.clients.end(); ++IRCServer.it){
+                            if (IRCServer.it->first == IRCServer.fds[i].fd) {
+                                delete IRCServer.it->second;
+                                IRCServer.clients.erase(IRCServer.it);
+                            }
+                        } 
+                        close(IRCServer.fds[i].fd);
+						IRCServer.fds.erase(IRCServer.fds.begin() + i);
 						--i;
 					}
 					else {
@@ -143,6 +167,7 @@ int main() {
 					}
         		}	
     		}
+            
 		}
 	}
 

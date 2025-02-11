@@ -14,33 +14,21 @@ class client {
         char            _nickname[256];
         char            _username[256];
 		bool			_operator;
-        int             _id;
-        int             _clientSocket;
-		struct pollfd	_fd;
+        int             _socket;
+
 
     public:
 
-        client(int clientSocket, int id) : _clientSocket(clientSocket), _id(id), _operator(false) {
-            std::cout << "Client id " << id << " connected" << std::endl;
-        }
+        client(int clientSocket) : _socket(clientSocket), _operator(false) {}
 
         ~client() {
-            close(_clientSocket);
-			std::cout << "Client id " << _id << " disconnected" << std::endl;
+            close(_socket);
         }
 
 
         int	getClientSocket() {
-            return _clientSocket;
+            return _socket;
         }
-
-		struct pollfd&	getPollFd() {
-			return _fd;
-		}
-
-		int	getId() {
-			return _id;
-		}
 
 		std::string	getNickname() {
 			return _nickname;
@@ -49,7 +37,4 @@ class client {
 		std::string	getUsername() {
 			return _username;
 		}
-
-		
-        
 };
