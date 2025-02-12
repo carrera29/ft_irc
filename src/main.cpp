@@ -10,25 +10,71 @@
 #include "../include/client.hpp"
 #include "../include/server.hpp"
 
-int   Server::acceptConection(std::string command) {
-    std::cout << "Command: " << command << std::endl;
 
-    std::istringstream ss(command);
-    std::string word;
-    
+void   commandParser(std::string msg) {
+
+    /*
+        message         ::= ['@' <tags> SPACE] [':' <source> SPACE] <command> <parameters> <crlf>
+        SPACE           ::=  %x20 *( %x20 )   ; space character(s)
+        crlf            ::=  %x0D %x0A        ; "carriage return" "linefeed"
+        
+        The specific parts of an IRC message are:
+            tags: Optional metadata on a message, starting with ('@', 0x40).
+            source: Optional note of where the message came from, starting with (':', 0x3A).
+            command: The specific command this message represents.
+            parameters: If it exists, data relevant to this specific command.
+    */
+
+    std::stringstream   ss(msg);
+    std::string         command;
+    int                 nComm = 0;
+
     while (ss) {
-        ss >> word;
-        if (word == "PASS") {
-            ss >> word;
-            if (word == _password)
-                std::cout << "Password correct" << std::endl;
-            else {
-                std::cout << "Password incorrect" << std::endl;
-                return -1;
+
+        std::string command;
+        ss >> command;
+
+        if (nComm == 0 && command[0] == '@') {
+            std::string tag = command.substr(1, command.length());
+            std::vector<std::string> AllTags;
+            
+            int i = 0;
+            while ((i = command.find(";")) != std::string::npos) {
+                AllTags.push_back(command.substr(0, i));
+                command.erase(0, i + 1);
+            }
+            AllTags.push_back(command);
+
+            for (size_t i = 0; i < AllTags.size(); i++)
+                std::cout << "Tag " << i + 1 << ": " << AllTags[i] << std::endl;
+            nComm++;
+        }
+        else if (nComm < 2 && command[0] == ':') {
+            // https://modern.ircdocs.horse/#client-messages
+            std::string source = command.substr(1, command.length());
+            std::cout << "Source: " << source << std::endl;
+            nComm += 2;
+        }
+        else if (nComm > 1) {
+
+            /*
+                Specific to channel operators:
+                    if (word == "KICK") {}
+                    else if (word == "INVITE") {}
+                    else if (word == "TOPIC") {}
+                    else if (word == "MODE") {}
+            */
+
+            if (command[0] == ':') {
+                std::string msg = command.substr(1, command.length());
+                std::cout << "Msg: " << msg << std::endl;
             }
         }
+        else {
+            std::cout << "Error: format msg" << std::endl;
+            break;
+        }
     }
-    return 0;
 }
 
 int main(void) {
@@ -112,7 +158,7 @@ int main(void) {
             return 1;
         }
         for (int i = 0; i < IRCServer.sizeoffds(); ++i) {
-            
+
             if (IRCServer.fds[i].revents & POLLIN) { // si hay datos para leer
 
 				if (IRCServer.fds[i].fd == serverSocket) { // nueva conexión

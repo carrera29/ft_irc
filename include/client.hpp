@@ -25,7 +25,6 @@ class client {
             close(_socket);
         }
 
-
         int	getClientSocket() {
             return _socket;
         }

@@ -19,9 +19,9 @@ class Server
 
     public:
 
-        std::vector<struct pollfd>  fds;
-        std::map<int, class client *> clients;
-        std::map<int, class client *>::iterator it;
+        std::vector<struct pollfd>				fds;
+        std::map<int, class client *>			clients;
+        std::map<int, class client *>::iterator	it;
 
         Server(std::string password, int port) : _password(password), _port(port) {}
 
@@ -51,10 +51,4 @@ class Server
         void   setSocket(int socket) {
             _serverSocket = socket;
         }
-
-        inline size_t sizeoffds() {
-            return fds.size();
-        }
-        
-        int acceptConection(std::string command);
 };
