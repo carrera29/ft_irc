@@ -112,6 +112,7 @@ int main(void) {
             return 1;
         }
         for (int i = 0; i < IRCServer.sizeoffds(); ++i) {
+            
             if (IRCServer.fds[i].revents & POLLIN) { // si hay datos para leer
 
 				if (IRCServer.fds[i].fd == serverSocket) { // nueva conexión
@@ -140,7 +141,6 @@ int main(void) {
 						std::cerr << "Failed to send" << std::endl;
 						return 1;
 					}
-                    
 				}
 				else {
 					char buffer [1024] = {0};
@@ -148,16 +148,17 @@ int main(void) {
 					int bytesRead = recv(IRCServer.fds[i].fd, buffer, sizeof(buffer) - 1, 0);
 
 					if (bytesRead <= 0) {
-						std::cout << "Client number " << i << " disconnected" << std::endl;
 						
-                        for (IRCServer.it = IRCServer.clients.begin(); IRCServer.it != IRCServer.clients.end(); ++IRCServer.it){
+                        for (IRCServer.it = IRCServer.clients.begin(); IRCServer.it != IRCServer.clients.end(); ++IRCServer.it) {
                             if (IRCServer.it->first == IRCServer.fds[i].fd) {
                                 delete IRCServer.it->second;
-                                IRCServer.clients.erase(IRCServer.it);
+                                IRCServer.it = IRCServer.clients.erase(IRCServer.it);
+                                close(IRCServer.fds[i].fd);
+						        IRCServer.fds.erase(IRCServer.fds.begin() + i);
+                                std::cout << "Client number " << i << " disconnected" << std::endl;
+                                break;
                             }
-                        } 
-                        close(IRCServer.fds[i].fd);
-						IRCServer.fds.erase(IRCServer.fds.begin() + i);
+                        }
 						--i;
 					}
 					else {
@@ -165,11 +166,10 @@ int main(void) {
 						std::cout << "Cliente nº " << i << ": " <<buffer << std::endl;
 						memset(buffer, 0, sizeof(buffer));
 					}
-        		}	
+                }
     		}
-            
 		}
-	}
+    }
 
 	close(serverSocket);
 
