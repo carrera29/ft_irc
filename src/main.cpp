@@ -79,6 +79,7 @@ void   commandParser(std::string msg) {
 
 int main(void) {
 
+    // Create an instance of the IRCServer class
     Server IRCServer("password", 8080);
 
     /*
@@ -98,6 +99,7 @@ int main(void) {
     IRCServer.setAddressInfo();
 
     struct addrinfo *all, *i;
+
     getaddrinfo(NULL, "8080", IRCServer.getHints(), &all);
 
     int serverSocket;
@@ -106,18 +108,17 @@ int main(void) {
         if (serverSocket == -1)
             continue;
 
-        // reutilizar el puerto si está ocupado por otro proceso que no ha cerrado el socket
-        // SOL_SOCKET es el nivel de socket, SO_REUSEADDR es la opción que permite reutilizar el puerto
-        int yes = 1;   // un puntero a int con valor 1 para activar la opción
+        int yes = 1; 
         if (setsockopt(serverSocket, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int)) == -1) { 
             std::cerr << "Failed to setsockopt" << std::endl;
             return 1;
         }
-        // enlazar el socket a la dirección y puerto
+ 
         if (bind(serverSocket, i->ai_addr, i->ai_addrlen) == -1) {
             close(serverSocket);
             continue;
         }
+
         IRCServer.setSocket(serverSocket);
         break;
     }
@@ -128,6 +129,7 @@ int main(void) {
         return 1;
     }
 
+ 
     int maxQueue = 10;
     if (listen(IRCServer.getSocket(), maxQueue) == -1) { // maxQueue es el número máximo de conexiones pendientes
         std::cerr << "Failed to listen" << std::endl;
@@ -135,6 +137,8 @@ int main(void) {
     }
     std::cout << "Server listening on port 8080..." << std::endl;
 
+    // La estructura pollfd se usa para monitorizar múltiples sockets
+    // y detectar eventos como la llegada de nuevos datos o conexiones
 	/*
         struct pollfd {
             int fd;         // el fd del socket

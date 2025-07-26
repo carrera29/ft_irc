@@ -51,4 +51,8 @@ class Server
         void   setSocket(int socket) {
             _serverSocket = socket;
         }
+
+        inline size_t sizeoffds() {
+            return fds.size();
+        }
 };
