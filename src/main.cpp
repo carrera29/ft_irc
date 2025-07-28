@@ -39,7 +39,7 @@ void   commandParser(std::string msg) {
             std::vector<std::string> AllTags;
             
             int i = 0;
-            while ((i = command.find(";")) != std::string::npos) {
+            while ((i = command.find(";")) != (int)std::string::npos) {
                 AllTags.push_back(command.substr(0, i));
                 command.erase(0, i + 1);
             }
@@ -142,8 +142,10 @@ int main(void) {
 	/*
         struct pollfd {
             int fd;         // el fd del socket
-            short events;   // bitmap son los eventos que queremos monitorizar
-            short revents;  // son los eventos que han ocurrido
+            short events;   // Eventos a monitorizar:
+                            // POLLIN (entrada disponible), POLLOUT (salida disponible),
+                            // POLLHUP (socket cerrado), POLLERR (error), POLLNVAL (fd no válido)
+            short revents;  // Eventos que han ocurrido
         };
     */
 
@@ -152,6 +154,13 @@ int main(void) {
 	server.fd = serverSocket;
 	server.events = POLLIN;
 	server.revents = 0;
+
+    struct pollfd stdinfd;
+    memset(&stdinfd, 0, sizeof(stdinfd));
+    stdinfd.fd = 0; // Descriptor de entrada estándar (stdin)
+    stdinfd.events = POLLIN; 
+    stdinfd.revents = 0; 
+    IRCServer.fds.push_back(stdinfd);
 	
     IRCServer.fds.push_back(server);
 
@@ -161,12 +170,19 @@ int main(void) {
             std::cerr << "Failed to poll" << std::endl;
             return 1;
         }
-        for (int i = 0; i < IRCServer.sizeoffds(); ++i) {
+        for (size_t i = 0; i < IRCServer.sizeoffds(); ++i) {
 
-            if (IRCServer.fds[i].revents & POLLIN) { // si hay datos para leer
-
+            if (IRCServer.fds[i].revents & POLLIN) {
+                if (IRCServer.fds[i].fd == 0) { // stdin
+                    char buffer[1024];
+                    memset(buffer, 0, sizeof(buffer));
+                    int bytesRead = read(0, buffer, sizeof(buffer) - 1);
+                    if (bytesRead > 0 && std::string(buffer) == "exit\n") {
+                        std::cout << "Exiting server..." << std::endl;
+                        goto exit_loop;
+                    }
+                }
 				if (IRCServer.fds[i].fd == serverSocket) { // nueva conexión
-                   
                     // sockaddr_in clientAddr = {}; // almacena información del cliente (IP y puerto) 
                     // socklen_t   size = sizeof(clientAddr); // accept() la actualiza con el tamaño real de la dirección
 					int clientSocket = accept(serverSocket, NULL, NULL); //accept(serverSocket, &clientAddr, &clientAddrLen);
@@ -196,9 +212,8 @@ int main(void) {
 					char buffer [1024] = {0};
                     memset(buffer, 0, sizeof(buffer));
 					int bytesRead = recv(IRCServer.fds[i].fd, buffer, sizeof(buffer) - 1, 0);
-
+                    
 					if (bytesRead <= 0) {
-						
                         for (IRCServer.it = IRCServer.clients.begin(); IRCServer.it != IRCServer.clients.end(); ++IRCServer.it) {
                             if (IRCServer.it->first == IRCServer.fds[i].fd) {
                                 delete IRCServer.it->second;
@@ -212,7 +227,7 @@ int main(void) {
 						--i;
 					}
 					else {
-						buffer[bytesRead] = '\0';
+						buffer[bytesRead] = '\0'; 
 						std::cout << "Cliente nº " << i << ": " <<buffer << std::endl;
 						memset(buffer, 0, sizeof(buffer));
 					}
@@ -220,7 +235,7 @@ int main(void) {
     		}
 		}
     }
-
+    exit_loop:;
 	close(serverSocket);
 
     return 0;

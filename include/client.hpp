@@ -19,7 +19,10 @@ class client {
 
     public:
 
-        client(int clientSocket) : _socket(clientSocket), _operator(false) {}
+        client(int clientSocket) : _operator(false), _socket(clientSocket) {
+            memset(_nickname, 0, sizeof(_nickname));
+            memset(_username, 0, sizeof(_username));
+        }
 
         ~client() {
             close(_socket);
