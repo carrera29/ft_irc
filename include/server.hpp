@@ -1,3 +1,17 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   server.hpp                                         :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: pollo <pollo@student.42.fr>                +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2025/08/05 13:12:49 by pollo             #+#    #+#             */
+/*   Updated: 2025/08/05 16:08:21 by pollo            ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+
+#pragma once
+
 #include    <iostream>
 #include    <sys/socket.h>
 #include    <netdb.h>
@@ -8,51 +22,44 @@
 #include    <vector>
 #include    <map>
 
+class client;
+class channel;
+
 class Server
 {
-    private:
+	private:
 
-        std::string                 _password;
-        int                         _port;
-        int                         _serverSocket;
-        struct  addrinfo            _hints;
+		std::string			_password;
+		std::string			_port;
+		int					_serverSocket;
+		struct addrinfo		_hints;
 
-    public:
+	public:
 
-        std::vector<struct pollfd>				fds;
-        std::map<int, class client *>			clients;
-        std::map<int, class client *>::iterator	it;
+		std::vector<struct pollfd>				fds;
+		std::map<int, class client *>			clients;
+		std::vector<class channel *>			channels;
 
-        Server(std::string password, int port) : _password(password), _port(port) {}
+		Server(std::string password, int port) : _password(password), _port(port) {};
+		~Server() {};
 
-        ~Server() {
-            std::cout << "Server disconnected" << std::endl;
-        }
+		std::string	getPassword() {};
+		std::string	getPort() {};
+		const int	getSocket() {};
+		struct addrinfo	*getHints() {};
+		
+		void	setSocket(int socket) {};
 
-        void setAddressInfo() {
-            memset(&_hints, 0, sizeof(_hints));
-            _hints.ai_family = AF_UNSPEC;
-            _hints.ai_socktype = SOCK_STREAM;
-            _hints.ai_flags = AI_PASSIVE;
-        } 
+		inline size_t	sizeofFds() {};
 
-        std::string getPassword() {
-            return _password;
-        }
+		class client	*createClient(std::string nickname, std::string username, int socket) {};
+		void			removeClient(int socket) {};
+		class client	*getClient(int socket) {};
 
-        struct  addrinfo    *getHints() {
-            return &_hints;
-        }
+		void	handleJoin(const std::string& name, const std::string& topic, class client* creator) {};
+		void	handleKick(const std::string& name, class client* user) {};
+		void	handleInvite(const std::string& name, class client* user) {};
+		void	handleTopic(const std::string& name, const std::string& topic) {};
+		void	handleMode(const std::string& name, const std::string& mode) {};
 
-        int    getSocket() {
-            return _serverSocket;
-        }
-
-        void   setSocket(int socket) {
-            _serverSocket = socket;
-        }
-
-        inline size_t sizeoffds() {
-            return fds.size();
-        }
 };

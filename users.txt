@@ -1,0 +1,93 @@
+
+Tipo de conexión: TCP/IP (Socket)
+
+1. Conexión persistente y bidireccional
+
+El servidor escucha en un puerto TCP específico (8080).
+Cuando un cliente quiere conectarse, inicia una solicitud TCP hacia la IP y el puerto del servidor.
+Tras el proceso de conexión (handshake), el canal queda abierto y activo hasta que alguna de las partes lo cierre.
+La comunicación es bidireccional: el cliente y el servidor pueden enviarse mensajes en cualquier dirección en cualquier momento.
+
+
+2. Características de la conexión
+TCP garantiza que los mensajes llegan completos, en orden y sin errores ni duplicados.
+Antes de intercambiar datos, se establece una sesión lógica entre ambos extremos.
+Ambos pueden leer y escribir datos simultáneamente.
+
+3. El flujo tras la conexión
+El cliente envía mensajes como PASS, NICK, USER para autenticarse.
+Tras la autenticación, ambos pueden enviar y recibir mensajes IRC según el protocolo.
+El servidor puede manejar múltiples conexiones de clientes en paralelo, usando poll() para monitorizar actividad sin bloquearse.
+Al desconectar cualquiera de las partes TCP libera los recursos asociados a la conexión.
+
+
+
+Canales en IRC:
+
+Un canal es una sala de chat a la que varios clientes (usuarios) pueden unirse.
+Los nombres suelen empezar por #, como #general o #soporte.
+Los clientes se agrupan bajo ese nombre mientras están unidos, y todo mensaje enviado al canal es retransmitido a todos los miembros del grupo.
+
+¿Cómo es la comunicación a través del servidor?
+1. Conexión y autenticación
+Cada cliente se conecta al servidor (por TCP/IP), se identifica y autentica.
+
+2. Unirse a un canal
+El cliente envía un comando: JOIN #nombrecanal
+El servidor añade a ese cliente a la lista de usuarios de ese canal.
+
+3. Envío de mensajes en grupo
+Cuando un usuario manda un mensaje dirigido al canal:
+PRIVMSG #nombrecanal :Hola a todos
+El servidor recibe el mensaje y lo redistribuye a todos los clientes que están conectados a ese canal.
+
+Canales: lógica y reglas
+Los usuarios pueden entrar y salir de canales en cualquier momento (JOIN, PART).
+Puede haber permisos especiales: operadores, moderadores, usuarios normales.
+Comandos para gestionar canales: expulsar usuarios (KICK), cambiar topic (TOPIC), invitar (INVITE), etc.
+
+
+
+Gestión de Usuarios y Canales
+
+1. Define las estructuras de datos básicas
+    Clase o struct Usuario:
+        - fd (file descriptor/sockfd del cliente)
+        - nickname
+        - username
+        - estado de autenticación (awaiting nick/user/pass)
+        - flags: ¿operador?, ¿conectado?, etc.
+        - puntero/referencia a los canales en los que está
+
+    Clase o struct Canal:
+        - nombre (#general)
+        - lista de participantes (punteros o referencias a usuarios)
+        - lista de operadores
+        - topic (tema actual del canal)
+        - modos: canal privado, limitado, contraseña, etc.
+
+2. Gestión básica de usuarios
+    - Añade usuarios al conectar, mételos en un mapa/vector para localizarlos por fd/nick.
+    - Implementa la asignación/cambio de nick (NICK), y guarda/controla que no existan duplicados.
+    - Maneja el ciclo de autenticación (el usuario debe mandar PASS, luego NICK, luego USER).
+    - Planea cómo eliminarlo (de canales, del mapa y cerrar fd) cuando se desconecta.
+
+3. Desarrolla la lógica base de canales
+    - Cuando un usuario mande JOIN #canal, crea el canal si no existe y agrégalo a la lista.
+    - Vincula al usuario con el canal (y viceversa).
+    - Si es el primer usuario en el canal, márcalo como operador.
+    - Gestiona comandos básicos (PART, LIST, etc.): salir, listar, etc.
+
+4. Controla el envío de mensajes grupales
+    - Cuando un usuario envía un mensaje (“PRIVMSG #canal ...”), el servidor debe buscar la lista de usuarios en ese canal y retransmitirles el mensaje.
+    - Si es “PRIVMSG usuario”, gestiona el mensaje privado.
+
+5. Permisos y modos (a implementar tras lo básico)
+    - Añade los flags o listas necesarias en Canal para operadores, usuarios invitados, password, etc.
+    - Implementa lógica para comandos avanzados: KICK, INVITE, TOPIC, MODE.
+
+6. Desarrolla utilidades de consulta y depuración
+    - Función para listar todos los usuarios en un canal.
+    - Función para listar todos los canales activos y cuántos participantes tienen.
+    - Métodos claros para expulsar/añadir usuarios de canales según comando.
+

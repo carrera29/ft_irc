@@ -1,3 +1,15 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   client.hpp                                         :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: pollo <pollo@student.42.fr>                +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2025/08/05 13:13:30 by pollo             #+#    #+#             */
+/*   Updated: 2025/08/05 13:13:33 by pollo            ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+
 #pragma once
 
 #include <iostream>
@@ -6,37 +18,51 @@
 #include <string.h>
 #include <unistd.h>
 #include <cstring>
+#include <poll.h>
+#include <vector>
+
+class server;
+class channel;
 
 class client {
 
     private:
         
-        char            _nickname[256];
-        char            _username[256];
-		bool			_operator;
-        int             _socket;
+        std::string				_nickname;
+		std::string				_username;
+        int						_socket;
+        std::vector<channel*>	_channels;
 
 
     public:
 
-        client(int clientSocket) : _operator(false), _socket(clientSocket) {
-            memset(_nickname, 0, sizeof(_nickname));
-            memset(_username, 0, sizeof(_username));
-        }
 
-        ~client() {
-            close(_socket);
-        }
+		client(const std::string nickname, const std::string& username, const int socket) {
+			_socket = socket;
+			_nickname = nickname;
+			_username = username;
+			_channels.clear();
 
-        int	getClientSocket() {
-            return _socket;
-        }
+			std::cout << "Client created with nickname: " << _nickname << " and username: " << _username << std::endl;
+		}
 
-		std::string	getNickname() {
+		~client() {
+			_channels.clear();
+			if (_socket >= 0)
+				close(_socket);
+
+			std::cout << "Client disconnected" << std::endl;
+		}
+
+		const int	getClientSocket() {
+			return _socket;
+		}
+
+		const std::string	getNickname() const {
 			return _nickname;
 		}
 
-		std::string	getUsername() {
+		const std::string	getUsername() const {
 			return _username;
 		}
 };

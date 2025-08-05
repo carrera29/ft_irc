@@ -79,41 +79,36 @@ void   commandParser(std::string msg) {
 
 int main(void) {
 
-    // Create an instance of the IRCServer class
     Server IRCServer("password", 8080);
 
-    /*
-        struct addrinfo {
-            int              ai_flags;     // AI_PASSIVE, AI_CANONNAME, etc.
-            int              ai_family;    // AF_INET (IPv4), AF_INET6 (IPv6), AF_UNSPEC (whatever)
-            int              ai_socktype;  // SOCK_STREAM, SOCK_DGRAM
-            int              ai_protocol;  // use 0 for "any"
-            size_t           ai_addrlen;   // size of ai_addr in bytes
-            struct sockaddr *ai_addr;      // struct sockaddr_in or _in6
-            char            *ai_canonname; // full canonical hostname
-
-            struct addrinfo *ai_next;      // linked list, next node
-        }; 
-    */
-
-    IRCServer.setAddressInfo();
-
+    // getaddrinfo(const char *node, const char *service, const struct addrinfo *hints, struct addrinfo **res)
+    // node: es el nombre del host o NULL para usar la dirección local, también puede ser una dirección IP ("127.0.0.1")
+    // service: es el nombre del servicio o el número de puerto ("8080")
+    // hints: es un puntero a una estructura addrinfo (AF_INET, SOCK_STREAM, AI_PASSIVE)
+    // res: es un puntero a una lista de estructuras addrinfo que se rellenará con los resultados
+    
     struct addrinfo *all, *i;
-
     getaddrinfo(NULL, "8080", IRCServer.getHints(), &all);
 
     int serverSocket;
     for (i = all; i != NULL; i = i->ai_next) {
-        serverSocket = socket(i->ai_family, i->ai_socktype, i->ai_protocol);
+        // socket(int domain, int type, int protocol)
+        serverSocket = socket(AF_INET, SOCK_STREAM, 0);
         if (serverSocket == -1)
             continue;
 
-        int yes = 1; 
+        int yes = 1; // para permitir reutilizar la dirección del socket
         if (setsockopt(serverSocket, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int)) == -1) { 
             std::cerr << "Failed to setsockopt" << std::endl;
             return 1;
         }
- 
+        
+        // bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
+        // sockfd: es el descriptor del socket que se va a vincular
+        // addr: es un puntero a una estructura sockaddr que contiene la dirección local
+        // addrlen: es el tamaño de la estructura sockaddr
+        // En este caso, i->ai_addr es un puntero a una estructura sockaddr que
+        // contiene la dirección local y i->ai_addrlen es el tamaño de esa estructura.
         if (bind(serverSocket, i->ai_addr, i->ai_addrlen) == -1) {
             close(serverSocket);
             continue;
@@ -149,22 +144,26 @@ int main(void) {
         };
     */
 
-	struct pollfd server;
+    struct pollfd stdinfd;
+    memset(&stdinfd, 0, sizeof(stdinfd));
+    stdinfd.fd = 0;
+    stdinfd.events = POLLIN; 
+    stdinfd.revents = 0; 
+    IRCServer.fds.push_back(stdinfd);
+
+    struct pollfd server;
 	memset(&server, 0, sizeof(server));
 	server.fd = serverSocket;
 	server.events = POLLIN;
 	server.revents = 0;
-
-    struct pollfd stdinfd;
-    memset(&stdinfd, 0, sizeof(stdinfd));
-    stdinfd.fd = 0; // Descriptor de entrada estándar (stdin)
-    stdinfd.events = POLLIN; 
-    stdinfd.revents = 0; 
-    IRCServer.fds.push_back(stdinfd);
-	
     IRCServer.fds.push_back(server);
+	
 
     while (true) {
+        // poll(struct pollfd *fds, nfds_t nfds, int timeout)
+        // fds: es un puntero a un array de estructuras pollfd que se van a monitorizar
+        // nfds: es el número de estructuras pollfd en el array
+        // timeout: es el tiempo máximo de espera en milisegundos, -1 para esperar indefinidamente
         int events = poll(IRCServer.fds.data(), IRCServer.sizeoffds(), -1);
         if (events == -1) {
             std::cerr << "Failed to poll" << std::endl;
@@ -172,8 +171,9 @@ int main(void) {
         }
         for (size_t i = 0; i < IRCServer.sizeoffds(); ++i) {
 
+            // Si hay eventos en el socket del servidor y es un evento de entrada (POLLIN)
             if (IRCServer.fds[i].revents & POLLIN) {
-                if (IRCServer.fds[i].fd == 0) { // stdin
+                if (IRCServer.fds[i].fd == 0) { // si la entrada es del stdin
                     char buffer[1024];
                     memset(buffer, 0, sizeof(buffer));
                     int bytesRead = read(0, buffer, sizeof(buffer) - 1);
@@ -182,9 +182,8 @@ int main(void) {
                         goto exit_loop;
                     }
                 }
-				if (IRCServer.fds[i].fd == serverSocket) { // nueva conexión
-                    // sockaddr_in clientAddr = {}; // almacena información del cliente (IP y puerto) 
-                    // socklen_t   size = sizeof(clientAddr); // accept() la actualiza con el tamaño real de la dirección
+                // Si el evento es del socket del servidor 
+				if (IRCServer.fds[i].fd == serverSocket) { 
 					int clientSocket = accept(serverSocket, NULL, NULL); //accept(serverSocket, &clientAddr, &clientAddrLen);
 					if (clientSocket == -1) {
 						std::cerr << "Failed to accept" << std::endl;
@@ -197,16 +196,28 @@ int main(void) {
                     newfd.events = POLLIN;
                     newfd.revents = 0;
                     IRCServer.fds.push_back(newfd);
-                
-                    client* newClient = new client(clientSocket);
+                    
+                    
+                    // char clientBuffer[1024] = "Please, sent your nickename and username for the connection\n";
+                    // if (send(clientSocket, clientBuffer, strlen(clientBuffer), 0) == -1) {
+					// 	std::cerr << "Failed to send" << std::endl;
+					// 	return 1;
+					// }
+                    
+                    std::string nickname = "client";
+                    std::stringstream ss;
+                    ss << i;
+                    std::string username = ss.str();
+
+                    client* newClient = new client(nickname, username, clientSocket);
                     IRCServer.clients[clientSocket] = newClient;
                     std::cout << "Client number " << i << " connected" << std::endl;
 
-					int bytes_sent = send(clientSocket, "Welcome to the server\n", strlen("Welcome to the server\n"), 0);
-					if (bytes_sent == -1) {
-						std::cerr << "Failed to send" << std::endl;
-						return 1;
-					}
+                    
+					if (send(clientSocket, "Welcome to the server\n", strlen("Welcome to the server\n"), 0) == -1) {
+                        std::cerr << "Failed to send welcome message" << std::endl;
+                        return 1;
+                    }
 				}
 				else {
 					char buffer [1024] = {0};
