@@ -6,7 +6,7 @@
 /*   By: pollo <pollo@student.42.fr>                +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/08/05 13:13:13 by pollo             #+#    #+#             */
-/*   Updated: 2025/08/05 16:04:45 by pollo            ###   ########.fr       */
+/*   Updated: 2025/08/22 14:52:54 by pollo            ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -41,138 +41,36 @@ class channel {
 		bool					_channelKeyRequired;
 		bool					_channelOperatorPrivilege;
 		int						_maxUsers;
-
+		int						_currentUsers;
+		char					_channelKey[256];
 
     public:	
 
-		channel(const std::string& name, const std::string& topic, client* creator) {
-			_name = "#"+name;
-			_topic = topic;
-			_users.push_back(creator);
-			_operators.insert(creator);
-			_inviteOnlyChannel = false;
-			_restrictedTopic = false;
-			_channelKeyRequired = false;
-			_channelOperatorPrivilege = false;
-			_maxUsers = 0; 
+		channel(const std::string& name, const std::string& topic, client* creator);
+		~channel();
 
-			std::cout << "Channel " << _name << ": created" << std::endl;
-		}
+		const std::string	getChannelName();
+		const std::string	getChannelTopic();
 
-		~channel() {
-			_users.clear();
-			_operators.clear();
-			_bannedUsers.clear();
-			_name.clear();
-			_topic.clear();
+		void	setChannelTopic(const std::string& topic);
 
-			std::cout << "Channel " << _name << ": deleted" << std::endl;
-		}
+		void	addUser(client* user);
+		void	addOperator(client* user);
+		void	removeOperator(client* user);
+		void	removeUser(client* user);
+		void	banUser(client* user);
 
-		const std::string	getChannelName() {
-			return _name;
-		}
+		bool	getInviteOnlyChannel() const;
+		bool	getRestrictedTopic() const;
+		bool	getChannelKeyRequired() const;
+		bool	getChannelOperatorPrivilege() const;
+		int		getMaxUsers() const;
+		int		getCurrentUsers() const;
 
-		const std::string	getChannelTopic() {
-			return _topic;
-		}
-
-		void	setChannelTopic(const std::string& topic) {
-			_topic = topic;
-		}
-
-		void	addUser(client* user) {
-			if (std::find(_users.begin(), _users.end(), user) != _users.end()) {
-				return;
-			}
-			if (_maxUsers != 0 && _users.size() >= _maxUsers) {
-				std::cout << "Channel " << _name << " is full. Cannot add user " << user->getNickname() << std::endl;
-				return;
-			}
-			_users.push_back(user);
-			std::cout << "User " << user->getNickname() << " added to channel " << _name << std::endl;
-		}
-
-		void	addOperator(client* user) {
-			if (_operators.find(user) != _operators.end()) {
-				return;
-			}
-			_operators.insert(user);
-
-			std::cout << "User " << user->getNickname() << " is now an operator in channel " << _name << std::endl;
-		}
-
-		void	removeOperator(client* user) {
-			if (_operators.find(user) == _operators.end()) {
-				return;
-			}
-			_operators.erase(user);
-
-			std::cout << "User " << user->getNickname() << " is no longer an operator in channel " << _name << std::endl;
-		}
-
-		void	removeUser(client* user) {
-			std::vector<client*>::iterator it = std::find(_users.begin(), _users.end(), user);
-			if (it == _users.end()) {
-				return;
-			}
-			_users.erase(it);
-			if (_operators.find(user) != _operators.end()) {
-				_operators.erase(user);
-			}
-
-			std::cout << "User " << user->getNickname() << " removed from channel " << _name << std::endl;
-		}
-
-		void	banUser(client* user) {
-			if (_bannedUsers.find(user) != _bannedUsers.end()) {
-				return;
-			}
-			_bannedUsers.insert(user);
-			removeUser(user);
-			removeOperator(user);
-
-			std::cout << "User " << user->getNickname() << " is banned from channel " << _name << std::endl;
-		}
-
-		bool	getInviteOnlyChannel() const {
-			return _inviteOnlyChannel;
-		}
-
-		bool	getRestrictedTopic() const {
-			return _restrictedTopic;
-		}
-
-		bool	getChannelKeyRequired() const {
-			return _channelKeyRequired;
-		}
-
-		bool	getChannelOperatorPrivilege() const {
-			return _channelOperatorPrivilege;
-		}
-
-		int		getMaxUsers() const {
-			return _maxUsers;
-		}
-
-		void	setInviteOnlyChannel(bool inviteOnly) {
-			_inviteOnlyChannel = inviteOnly;
-		}
-
-		void	setRestrictedTopic(bool restricted) {
-			_restrictedTopic = restricted;
-		}
-
-		void	setChannelKeyRequired(bool keyRequired) {
-			_channelKeyRequired = keyRequired;
-		}
-
-		void	setChannelOperatorPrivilege(bool operatorPrivilege) {
-			_channelOperatorPrivilege = operatorPrivilege;
-		}
-
-		void	setMaxUsers(int maxUsers) {
-			_maxUsers = maxUsers;
-		}
-
+		void	setInviteOnlyChannel(bool inviteOnly);
+		void	setRestrictedTopic(bool restricted);
+		void	setChannelKeyRequired(bool keyRequired);
+		void	setChannelOperatorPrivilege(bool operatorPrivilege);
+		void	setMaxUsers(int maxUsers);
+		
 };

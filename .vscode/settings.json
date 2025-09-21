@@ -45,6 +45,11 @@
         "variant": "cpp",
         "vector": "cpp",
         "sstream": "cpp",
-        "algorithm": "cpp"
+        "algorithm": "cpp",
+        "__tree": "cpp",
+        "set": "cpp",
+        "complex": "cpp",
+        "memory": "cpp",
+        "map": "cpp"
     }
 }

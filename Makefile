@@ -1,12 +1,13 @@
-NAME	=	ircserv
+NAME	=	irc
 
 SRC_DIR	= ./src
 OBJ_DIR	= ./obj
 INC_DIR	= ./include
 
-SRCS	=	$(SRC_DIR)/main.cpp
-# 			$(SRC_DIR)/conection.cpp
-# 			$(SRC_DIR)/pruebas.cpp
+SRCS	=	$(SRC_DIR)/conexion_prueba.cpp
+# 			$(SRC_DIR)/server.cpp \
+# 			$(SRC_DIR)/client.cpp \
+# 			$(SRC_DIR)/channel.cpp \
 
 OBJS	=	$(SRCS:$(SRC_DIR)/%.cpp=$(OBJ_DIR)/%.o)
 
@@ -28,7 +29,6 @@ clean:
 
 fclean:	clean
 	@rm -f $(NAME)
-	@rm ircserv
 
 re: fclean all
 
