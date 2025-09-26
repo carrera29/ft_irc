@@ -51,6 +51,13 @@ void handle_line(int clientSocket, const std::string &line, std::string &nick) {
             send_all(clientSocket, welcome);
         }
     }
+    else if (command == "PING") {
+    std::string token;
+    iss >> token;
+    std::string pong = "PONG " + token + "\r\n";
+    send_all(clientSocket, pong);
+    std::cout << "Responded to PING with: " << pong;
+    }
     else {
         std::cout << "Raw IRC Msg: " << line << "\n";
     }
